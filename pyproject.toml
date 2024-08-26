@@ -26,6 +26,7 @@ django-celery-beat = "^2.6.0"
 setuptools = "^72.2.0"
 eventlet = "^0.36.1"
 djoser = "^2.2.3"
+drf-nested-routers = "^0.94.1"
 
 
 

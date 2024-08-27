@@ -1,41 +1,27 @@
 from rest_framework import serializers
 
-from .models import Ad, Comment, Mymodel
-
-
-class CommentSerializer(serializers.ModelSerializer):
-    author_id = serializers.ReadOnlyField(source="author.pk")
-    author_first_name = serializers.ReadOnlyField(source="author_first_name")
-    author_last_name = serializers.ReadOnlyField(source="author_last_name")
-    ad_id = serializers.ReadOnlyField(source="ad.pk")
-
-    class Meta:
-        model = Comment
-        fields = "__all__"
+from notice.models import Ad, Comment
 
 
 class AdSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Ad
-        fields = ["pk", "image", "title", "price", "description"]
-
-
-class AdDetailSerializer(serializers.ModelSerializer):
-    author_first_name = serializers.SerializerMethodField()
-    author_last_name = serializers.SerializerMethodField()
-
-    def get_author_first_name(self, ad):
-        return ad.author.first_name
-
-    def get_author_last_name(self, ad):
-        return ad.author.last_name
+    """Сериализатор для модели Ad"""
 
     class Meta:
         model = Ad
-        fields = "__all__"
+        fields = ["id", "title", "price", "description", "author"]
+        read_only_fields = ["author"]
 
 
-class MyModelSerializer(serializers.ModelSerializer):
+class ReviewSerializer(serializers.ModelSerializer):
+    """Сериализатор для модели Review"""
+
     class Meta:
-        model = Mymodel
-        fields = "__all__"
+        model = Comment
+        fields = ["id", "text", "ad", "author", "created_at"]
+        read_only_fields = ["ad", "author"]
+
+
+class ReviewCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = ["text"]

@@ -22,6 +22,11 @@ class Ad(models.Model):
     )
     image = models.ImageField(upload_to="ad_images", null=True, blank=True)
 
+    class Meta:
+        verbose_name = "Объявление"
+        verbose_name_plural = "Объявления"
+        ordering = ["-created_at"]
+
 
 class Comment(models.Model):
     """
@@ -33,8 +38,6 @@ class Comment(models.Model):
     ad = models.ForeignKey(Ad, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
-
-class Mymodel(models.Model):
-    title = models.CharField(max_length=100)
-    description = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        verbose_name = "Отзыв"
+        verbose_name_plural = "Отзывы"

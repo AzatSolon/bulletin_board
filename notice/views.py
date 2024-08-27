@@ -1,65 +1,134 @@
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import pagination, viewsets
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework import generics, status
+from rest_framework.filters import SearchFilter
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 
-from .filters import MyModelFilter
-from .models import Ad, Comment, Mymodel
-from .permissions import IsOwner
-from .serializers import (
-    AdSerializer,
-    AdDetailSerializer,
-    CommentSerializer,
-    MyModelSerializer,
-)
+from notice.models import Ad, Comment
+from notice.paginations import AdsPaginator
+from notice.permissions import IsOwner, IsAdminUser
+from notice.serializers import AdSerializer, ReviewCreateSerializer, ReviewSerializer
 
 
-class AdPagination(pagination.PageNumberPagination):
-    page_size = 4
+class AdsCreateAPIView(generics.CreateAPIView):
+    """Создание объявления"""
+
+    serializer_class = AdSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
 
 
-class AdViewSet(viewsets.ModelViewSet):
+class AdsRetrieveAPIView(generics.RetrieveAPIView):
+    """Просмотр информации об одном объявлении"""
+
     queryset = Ad.objects.all()
-    pagination_class = AdPagination
+    serializer_class = AdSerializer
+    permission_classes = [IsAuthenticated, IsOwner]
+
+
+class AdsUpdateAPIView(generics.UpdateAPIView):
+    """Редактирование объявления"""
+
+    serializer_class = AdSerializer
+    queryset = Ad.objects.all()
+    permission_classes = [IsOwner, IsAdminUser]
+
+    def perform_update(self, serializer):
+        ad = serializer.save()
+        ad.save()
+
+
+class AdsDestroyAPIView(generics.DestroyAPIView):
+    """Удаление объявления"""
+
+    queryset = Ad.objects.all()
+    permission_classes = [IsOwner, IsAdminUser]
+
+    def perform_destroy(self, instance):
+        instance.delete()
+
+
+class AdsListAPIView(generics.ListAPIView):
+    """Вывод списка всех объявлений"""
+
+    serializer_class = AdSerializer
+    pagination_class = AdsPaginator
+    queryset = Ad.objects.all()
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ["title"]
+    search_fields = ["title"]
+    permission_classes = [AllowAny]
+
+
+class ReviewCreateAPIView(generics.CreateAPIView):
+    """Создание отзыва"""
+
+    queryset = Comment.objects.all()
     permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
-        if self.action in [
-            "retrieve",
-        ]:
-            return AdDetailSerializer
-        else:
-            return AdSerializer
-
-    def get_permissions(self):
-        if self.action in ["update", "destroy"]:
-            self.permission_classes = [IsAuthenticated, IsAdminUser | IsOwner]
-        return super().get_permissions()
-
-    @action(detail=False)
-    def me(self, request, *args, **kwargs):
-        self.queryset = Ad.objects.filter(author=request.user)
-        return super().list(self, request, *args, **kwargs)
-
-
-class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.all()
-    serializer_class = CommentSerializer
-
-    def get_queryset(self):
-        ad_id = self.kwargs.get("ad_pk")
-        return Comment.objects.filter(ad_id=ad_id)
+        if self.request.method == "POST":
+            return ReviewCreateSerializer
+        return ReviewSerializer
 
     def perform_create(self, serializer):
-        ad_id = self.kwargs.get("ad_pk")
-        ad_instance = get_object_or_404(Ad, pk=ad_id)
-        user = self.request.user
-        serializer.save(author=user, ad=ad_instance)
+        serializer.save(author=self.request.user, ad_id=self.kwargs["ad_id"])
 
 
-class MyModelViewSet(viewsets.ModelViewSet):
-    queryset = Mymodel.objects.all()
-    filter_backends = (DjangoFilterBackend,)
-    serializer_class = MyModelSerializer
-    filterset_class = MyModelFilter
+class ReviewUpdateAPIView(generics.UpdateAPIView):
+    """Редактирование отзыва"""
+
+    serializer_class = ReviewSerializer
+    queryset = Comment.objects.all()
+    permission_classes = [IsOwner, IsAdminUser]
+
+    def put(self, request, *args, **kwargs):
+        ad_id = self.kwargs["ad_id"]
+        review_id = self.kwargs["pk"]
+
+        review = get_object_or_404(Comment, pk=review_id)
+
+        if review.ad.id != ad_id:
+            return Response(
+                "Невозможно обновить отзыв из-за некорректного запроса",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = self.get_serializer(review, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        return Response(serializer.data)
+
+
+class ReviewDestroyAPIView(generics.DestroyAPIView):
+    """Удаление отзыва"""
+
+    queryset = Comment.objects.all()
+    permission_classes = [IsOwner, IsAdminUser]
+
+    def delete(self, request, *args, **kwargs):
+        ad_id = self.kwargs["ad_id"]
+        review_id = self.kwargs["pk"]
+
+        review = get_object_or_404(Comment, pk=review_id)
+
+        if review.ad.id != ad_id:
+            return Response(
+                "Невозможно удалить отзыв из-за некорректного запроса",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        self.perform_destroy(review)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ReviewListAPIView(generics.ListAPIView):
+    """Вывод списка всех отзывов"""
+
+    serializer_class = ReviewSerializer
+    queryset = Comment.objects.all()
+    permission_classes = [AllowAny]
